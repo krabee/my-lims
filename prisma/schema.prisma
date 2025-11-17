@@ -1,0 +1,106 @@
+// Prisma schema for Laboratory Information Management System
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// Patient entity
+model Patient {
+  id            String      @id @default(uuid())
+  patientNumber String      @unique @map("patient_number")
+  firstName     String      @map("first_name")
+  lastName      String      @map("last_name")
+  dateOfBirth   DateTime?   @map("date_of_birth") @db.Date
+  labResults    LabResult[]
+  createdAt     DateTime    @default(now()) @map("created_at")
+  createdBy     String?     @map("created_by")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+  updatedBy     String?     @map("updated_by")
+  deletedAt     DateTime?   @map("deleted_at")
+
+  @@map("patients")
+}
+
+// Lab Result entity (one result per uploaded document)
+model LabResult {
+  id           String         @id @default(uuid())
+  patient      Patient        @relation(fields: [patientId], references: [id])
+  patientId    String         @map("patient_id")
+  testDate     DateTime       @map("test_date") @db.Date
+  testType     TestType       @relation(fields: [testTypeId], references: [id])
+  testTypeId   String         @map("test_type_id")
+  status       ResultStatus   @default(PENDING)
+  file         UploadedFile?
+  testValues   TestValue[]
+  createdAt    DateTime       @default(now()) @map("created_at")
+  createdBy    String?        @map("created_by")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+  updatedBy    String?        @map("updated_by")
+  deletedAt    DateTime?      @map("deleted_at")
+
+  @@index([patientId])
+  @@index([testDate])
+  @@index([status])
+  @@map("lab_results")
+}
+
+// Test Type entity (catalog of available tests)
+model TestType {
+  id          String      @id @default(uuid())
+  code        String      @unique
+  name        String
+  unit        String?
+  minValue    Float?      @map("min_value")
+  maxValue    Float?      @map("max_value")
+  labResults  LabResult[]
+  testValues  TestValue[]
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  @@map("test_types")
+}
+
+// Test Value entity (individual test measurements within a lab result)
+model TestValue {
+  id          String    @id @default(uuid())
+  labResult   LabResult @relation(fields: [labResultId], references: [id], onDelete: Cascade)
+  labResultId String    @map("lab_result_id")
+  testType    TestType  @relation(fields: [testTypeId], references: [id])
+  testTypeId  String    @map("test_type_id")
+  value       Float
+  isAbnormal  Boolean   @default(false) @map("is_abnormal")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@index([labResultId])
+  @@index([testTypeId])
+  @@map("test_values")
+}
+
+// Uploaded File entity
+model UploadedFile {
+  id          String    @id @default(uuid())
+  labResult   LabResult @relation(fields: [labResultId], references: [id], onDelete: Cascade)
+  labResultId String    @unique @map("lab_result_id")
+  fileName    String    @map("file_name")
+  filePath    String    @map("file_path")
+  fileSize    Int       @map("file_size")
+  mimeType    String    @map("mime_type")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@map("uploaded_files")
+}
+
+// Result status enum
+enum ResultStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}

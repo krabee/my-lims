@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  mariadb:
+    image: mariadb:11
+    container_name: my-lims-db
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootpassword}
+      MARIADB_DATABASE: ${DB_NAME:-lims}
+      MARIADB_USER: ${DB_USER:-limsuser}
+      MARIADB_PASSWORD: ${DB_PASSWORD:-limspassword}
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    networks:
+      - lims-network
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: my-lims-app
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: mysql://${DB_USER:-limsuser}:${DB_PASSWORD:-limspassword}@mariadb:3306/${DB_NAME:-lims}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      NODE_ENV: production
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    volumes:
+      - ./public/uploads:/app/public/uploads
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    networks:
+      - lims-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  mariadb_data:
+
+networks:
+  lims-network:
+    driver: bridge
